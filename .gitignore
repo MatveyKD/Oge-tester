@@ -8,6 +8,10 @@ quests
 
 # C extensions
 *.so
+.idea/
+Passings.xlsx
+Questions.xlsx
+Vars.xlsx
 
 # Distribution / packaging
 .Python
