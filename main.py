@@ -87,9 +87,17 @@ def create_var(update, context):
 
     return 'CREATE_VAR'
 
-def quest6(update, context): return generate(update, context, 6)
-def quest7(update, context): return generate(update, context, 7)
-def quest8(update, context): return generate(update, context, 8)
+def quest6(update, context): return generate(update, context,   6)
+def quest7(update, context): return generate(update, context,   7)
+def quest8(update, context): return generate(update, context,   8)
+def quest9(update, context): return generate(update, context,   9)
+def quest10(update, context): return generate(update, context, 10)
+def quest11(update, context): return generate(update, context, 11)
+def quest12(update, context): return generate(update, context, 12)
+def quest13(update, context): return generate(update, context, 13)
+def quest15(update, context): return generate(update, context, 15)
+def quest16(update, context): return generate(update, context, 16)
+def quest17(update, context): return generate(update, context, 17)
 
 def generate(update, context, quest):
     query = update.callback_query
@@ -150,12 +158,26 @@ def get_passings(update, context):
     user_id = update.effective_user.id
     uniq_id = update.message.text
 
-    # получение прохождений
-    kod = uniq_id  # интересующий нас код
-    df_passings = pd.read_excel(passings_path, index_col=None).reset_index(drop=True)  # открываем файл с результатами
-    df_passings_filtered = df_passings[(df_passings['var'] == kod)]  # вытаскиваем строки с нашим кодом
-    quest = df_passings_filtered.iloc[0][['quest']].squeeze()  # номер задания у всех один, вытаскиваем его из первой строки
-    df_out = df_passings_filtered[['user', 'time', 'task', 'answs']].copy()  # формируем таблицу выводных данных из строк
+    try:
+        # получение прохождений
+        kod = uniq_id  # интересующий нас код
+        df_passings = pd.read_excel(passings_path, index_col=None).reset_index(drop=True)  # открываем файл с результатами
+        df_passings_filtered = df_passings[(df_passings['var'] == kod)]  # вытаскиваем строки с нашим кодом
+        quest = df_passings_filtered.iloc[0][['quest']].squeeze()  # номер задания у всех один, вытаскиваем его из первой строки
+        df_out = df_passings_filtered[['user', 'time', 'task', 'answs']].copy()  # формируем таблицу выводных данных из строк
+    except:
+        keyboard = [
+            [
+                InlineKeyboardButton("в меню", callback_data='menu'),
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.effective_message.reply_text(
+            text=f"""Код не действителен\nВведите действующий код""",
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML
+        )
+        return "GET_PASSINGS"
 
     var = {}
     for d in df_out.values.tolist():
@@ -294,7 +316,10 @@ def take_test(update, context):
         with open("answers.json", encoding="UTF-8") as file:
             data = json.load(file)
         true_ans = df_questions.loc[((df_questions['quest'] == float(quest)) & (df_questions['task'] == float(context.user_data["tasks"][context.user_data["numb"]-1])))][['true_ans']].squeeze()
-        ans = float(text) == true_ans
+        try:
+            ans = float(text) == true_ans or text == true_ans
+        except:
+            ans = text == true_ans
         if ans:
             update.effective_message.reply_text(
                 text=f"""Верно!""",
@@ -302,7 +327,7 @@ def take_test(update, context):
             )
             context.user_data["res"] += 1
         else:
-            if int(true_ans) == true_ans:
+            if type(true_ans) is type(1):
                 true_ans = int(true_ans)
             update.effective_message.reply_text(
                 text=f"""Неверно. Правильный ответ: {true_ans}""",
@@ -343,11 +368,13 @@ def take_test(update, context):
         while len(context.user_data["tasks"]) < amount:
             n = r.randint(1, mx)
             if n not in context.user_data["tasks"]: context.user_data["tasks"].append(n)
+        print(context.user_data["tasks"])
         context.user_data["tasks"].sort()
         context.user_data["start_time"] = time.time()
 
     if context.user_data["numb"] < amount:
         context.user_data["numb"] += 1
+
         numb = str(context.user_data["tasks"][context.user_data["numb"]-1])
         # quest_str = str(quest)
         if len(quest) < 2: quest = "0" + quest
@@ -368,6 +395,10 @@ def take_test(update, context):
             reply_markup=reply_markup,
             parse_mode=ParseMode.HTML
         )
+        df_passings.loc[(df_passings['var'] == context.user_data["uniq_id"]) & (df_passings['user'] == username), 'time'] = time.time()-context.user_data["start_time"]  # записываем время во все строки сразу
+        df_passings.loc[(df_passings['var'] == context.user_data["uniq_id"]) & (df_passings['user'] == username), 'completed'] = True  # записываем True во все строки сразу
+        with pd.ExcelWriter(passings_path, mode='a', if_sheet_exists='replace') as writer:  # записываем измененный датафрейм в исходный файл
+            df_passings.to_excel(writer, index=False)
 
         del context.user_data["numb"]
         del context.user_data["uniq_id"]
@@ -391,6 +422,14 @@ def main():
                 CallbackQueryHandler(quest6, pattern='question6'),
                 CallbackQueryHandler(quest7, pattern='question7'),
                 CallbackQueryHandler(quest8, pattern='question8'),
+                CallbackQueryHandler(quest9, pattern='question9'),
+                CallbackQueryHandler(quest10, pattern='question10'),
+                CallbackQueryHandler(quest11, pattern='question11'),
+                CallbackQueryHandler(quest12, pattern='question12'),
+                CallbackQueryHandler(quest13, pattern='question13'),
+                CallbackQueryHandler(quest15, pattern='question15'),
+                CallbackQueryHandler(quest16, pattern='question16'),
+                CallbackQueryHandler(quest17, pattern='question17'),
                 CallbackQueryHandler(start_conversation, pattern='menu'),
             ],
             'GENERATE': [
@@ -428,4 +467,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    while True:
+        try:
+            main()
+        except:
+            time.sleep(10)
