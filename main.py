@@ -23,10 +23,6 @@ import pandas as pd
 
 from environs import Env
 
-questions_path = "C:/Users/Honor/Documents/GitHub/Oge-tester/Questions.xlsx"
-vars_path = "C:/Users/Honor/Documents/GitHub/Oge-tester/Vars.xlsx"
-passings_path = "C:/Users/Honor/Documents/GitHub/Oge-tester/Passings.xlsx"
-
 # # открываем файлы в качестве БД:
 # df_questions = pd.read_excel(questions_path, index_col=None).reset_index(drop=True)
 # df_vars = pd.read_excel(vars_path, index_col=None).reset_index(drop=True)
@@ -36,29 +32,32 @@ passings_path = "C:/Users/Honor/Documents/GitHub/Oge-tester/Passings.xlsx"
 env = Env()
 env.read_env()
 
+questions_path = env.str("QUESTIONS_PATH")
+vars_path = env.str("VARS_PATH")
+passings_path = env.str("PASSINGS_PATH")
+
 
 def start_conversation(update, context):
     query = update.callback_query
     user_id = update.effective_user.id
     # print(update)
     username = update.effective_user.username
-
-    # if username in data["admins"]:
-    keyboard = [
-        [
-            InlineKeyboardButton("Создать вариант", callback_data='create_var'),
-            InlineKeyboardButton("Пройти тест", callback_data='to_test'),
-        ],
-        [InlineKeyboardButton("Просмотреть прохождения", callback_data='passings')]
-    ]
-    text = "Вы находитесь в панели администратора"
-    # else:
-    #     keyboard = [
-    #         [
-    #             InlineKeyboardButton("пройти тест", callback_data='to_test'),
-    #         ]
-    #     ]
-    #     text = "панель пользователя"
+    if username in env.list("ADMINS"):
+        keyboard = [
+            [
+                InlineKeyboardButton("Создать вариант", callback_data='create_var'),
+                InlineKeyboardButton("Пройти тест", callback_data='to_test'),
+            ],
+            [InlineKeyboardButton("Просмотреть прохождения", callback_data='passings')]
+        ]
+        text = "Вы находитесь в панели администратора"
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton("пройти тест", callback_data='to_test'),
+            ]
+        ]
+        text = "панель пользователя"
     reply_markup = InlineKeyboardMarkup(keyboard)
     update.effective_message.reply_text(
         text=text,
@@ -98,6 +97,8 @@ def quest13(update, context): return generate(update, context, 13)
 def quest15(update, context): return generate(update, context, 15)
 def quest16(update, context): return generate(update, context, 16)
 def quest17(update, context): return generate(update, context, 17)
+def quest18(update, context): return generate(update, context, 18)
+def quest19(update, context): return generate(update, context, 19)
 
 def generate(update, context, quest):
     query = update.callback_query
@@ -162,7 +163,7 @@ def get_passings(update, context):
         # получение прохождений
         kod = uniq_id  # интересующий нас код
         df_passings = pd.read_excel(passings_path, index_col=None).reset_index(drop=True)  # открываем файл с результатами
-        df_passings_filtered = df_passings[(df_passings['var'] == kod)]  # вытаскиваем строки с нашим кодом
+        df_passings_filtered = df_passings[(df_passings['var'] == kod) & (df_passings['completed'] == True)]  # вытаскиваем строки с нашим кодом
         quest = df_passings_filtered.iloc[0][['quest']].squeeze()  # номер задания у всех один, вытаскиваем его из первой строки
         df_out = df_passings_filtered[['user', 'time', 'task', 'answs']].copy()  # формируем таблицу выводных данных из строк
     except:
@@ -261,13 +262,16 @@ def start_test(update, context):
     query = update.callback_query
     user_id = update.effective_user.id
     uniq_id = update.message.text
+    username = update.effective_user.username
+    if not username:
+        username = str(user_id)
 
     df_vars = pd.read_excel(vars_path, index_col=None).reset_index(drop=True)
 
     var_code = uniq_id
     var_code_entry = df_vars[(df_vars['var'] == var_code)]
     quest = var_code_entry[['quest']].squeeze()
-    if not quest:
+    if var_code_entry.empty:
         keyboard = [
             [
                 InlineKeyboardButton("в меню", callback_data='menu'),
@@ -280,6 +284,21 @@ def start_test(update, context):
             parse_mode=ParseMode.HTML
         )
     else:
+        df_passings = pd.read_excel(passings_path, index_col=None).reset_index(drop=True)  # открываем файл с результатами
+        df_passings_user = df_passings[(df_passings['var'] == uniq_id) & (df_passings['user'] == username) & (df_passings['completed'] == True)]  # вытаскиваем строки с нашим кодом
+        if not df_passings_user.empty:
+            keyboard = [
+                [
+                    InlineKeyboardButton("в меню", callback_data='menu'),
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.effective_message.reply_text(
+                text=f"""Вы уже прошли этот вариант\nУкажите другой код""",
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML
+            )
+            return "START_TEST"
         keyboard = [
             [
                 InlineKeyboardButton("Начать тест", callback_data='take_test'),
@@ -430,6 +449,8 @@ def main():
                 CallbackQueryHandler(quest15, pattern='question15'),
                 CallbackQueryHandler(quest16, pattern='question16'),
                 CallbackQueryHandler(quest17, pattern='question17'),
+                CallbackQueryHandler(quest18, pattern='question18'),
+                CallbackQueryHandler(quest19, pattern='question19'),
                 CallbackQueryHandler(start_conversation, pattern='menu'),
             ],
             'GENERATE': [
